@@ -1,0 +1,53 @@
+- name: Configure MySQL server
+  hosts: mysql
+  become: yes
+  vars:
+    mysql_root_password: ExpenseApp@1
+
+  tasks:
+    - name: Install required Python libraries for MySQL
+      ansible.builtin.pip:
+        name: "{{ item }}"
+        executable: pip3.9
+      loop:
+        - cryptography
+        - PyMySQL
+
+    - name: Install MySQL server
+      ansible.builtin.package:
+        name: mysql-server
+        state: present
+
+    - name: Start and enable MySQL server
+      ansible.builtin.service:
+        name: mysqld
+        state: started
+        enabled: yes
+
+    - name: Try connecting to MySQL with root password
+      community.mysql.mysql_info:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+      register: mysql_info
+      ignore_errors: true
+
+    - name: Print the output
+      ansible.builtin.debug:
+        msg: "MySQL info: {{ mysql_info }}"
+
+    - name: Set root password if login failed (assumes no password yet)
+      ansible.builtin.shell: >
+        mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ mysql_root_password }}'; FLUSH PRIVILEGES;"
+      when: mysql_info.failed is defined and mysql_info.failed
+
+    - name: Ensure MySQL root user has correct password
+      community.mysql.mysql_user:
+        name: root
+        host: localhost
+        password: "{{ mysql_root_password }}"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+        state: present
+
